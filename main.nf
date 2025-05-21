@@ -37,16 +37,32 @@ workflow get_data {
             log.info ""
             log.info "    --input=/path/to/[input]   Input directory containing your subjects"
             log.info "                        |"
-            log.info "                        ├-- S1"
-            log.info "                        |    ├-- *dwi.nii.gz"
-            log.info "                        |    ├-- *dwi.bval"
-            log.info "                        |    ├-- *dwi.bvec"
-            log.info "                        |    └-- *t1.nii.gz"
-            log.info "                        └-- S2"
-            log.info "                             ├-- *dwi.nii.gz"
-            log.info "                             ├-- *dwi.bval"
-            log.info "                             ├-- *dwi.bvec"
-            log.info "                             └-- *t1.nii.gz"
+            log.info "                        ├-- sub-1/"
+            log.info "                        |    ├-- ses-1/"
+            log.info "                        |    |    ├-- *dwi.nii.gz"
+            log.info "                        |    |    ├-- *dwi.bval"
+            log.info "                        |    |    ├-- *dwi.bvec"
+            log.info "                        |    |    ├-- *t1.nii.gz"
+            log.info "                        |    |    └-- freesurfer/" // Optional
+            log.info "                        |    ├-- ses-2/"
+            log.info "                        |    |    ├-- *dwi.nii.gz"
+            log.info "                        |    |    ├-- *dwi.bval"
+            log.info "                        |    |    ├-- *dwi.bvec"
+            log.info "                        |    |    ├-- *t1.nii.gz"
+            log.info "                        |    |    └-- freesurfer/" // Optional
+            log.info "                        └-- sub-2/"
+            log.info "                             ├-- ses-1/"
+            log.info "                             |    ├-- *dwi.nii.gz"
+            log.info "                             |    ├-- *dwi.bval"
+            log.info "                             |    ├-- *dwi.bvec"
+            log.info "                             |    ├-- *t1.nii.gz"
+            log.info "                             |    └-- freesurfer/" // Optional
+            log.info "                             └-- ses-2/"
+            log.info "                                  ├-- *dwi.nii.gz"
+            log.info "                                  ├-- *dwi.bval"
+            log.info "                                  ├-- *dwi.bvec"
+            log.info "                                  ├-- *t1.nii.gz"
+            log.info "                                  └-- freesurfer/" // Optional
             log.info ""
             error "Please resubmit your command with the previous file structure."
         }
@@ -206,16 +222,9 @@ workflow {
         .combine(inputs.mni_template)
         .join(ch_transform_to_mni)
     TRANSFORM_MASK_WM_MNI ( ch_ants_apply_mask_wm_mni )
-    
-    ch_concatenate = TRACTOFLOW.out.pft_tractogram
-        .concat(TRACTOFLOW.out.local_tractogram)
-        .groupTuple()
-        .join(TRACTOFLOW.out.dti_fa)
-
-    CONCATENATE ( ch_concatenate )
 
     // We need to transform the tractogram to MNI space.
-    ch_ants_apply_tractogram_to_mni = CONCATENATE.out.trk
+    ch_ants_apply_tractogram_to_mni = TRACTOFLOW.out.local_tractogram
         .combine(inputs.mni_template)
         .join(REGISTER_TO_MNI.out.affine)
         .join(TRACTOFLOW.out.dti_fa)

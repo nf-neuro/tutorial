@@ -4,8 +4,8 @@ process REGISTRATION_ANTS {
     label 'process_medium'
 
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        "https://scil.usherbrooke.ca/containers/scilus_latest.sif":
-        "scilus/scilus:latest"}"
+        'https://scil.usherbrooke.ca/containers/scilus_2.0.2.sif':
+        'scilus/scilus:latest'}"
 
     input:
     tuple val(meta), path(fixedimage), path(movingimage), path(mask) //** optional, input = [] **//

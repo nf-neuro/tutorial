@@ -47,7 +47,7 @@ process VOLUME_MATH_DOUBLE {
 
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://scil.usherbrooke.ca/containers/scilus_2.0.2.sif':
-        'scilus/scilus:latest' }"
+        'scilus/scilus:latest'}"
 
     input:
         tuple val(meta), path(image1), path(image2)

@@ -3,8 +3,8 @@ process REGISTRATION_ANTSAPPLYTRANSFORMS {
     label 'process_low'
 
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        "https://scil.usherbrooke.ca/containers/scilus_latest.sif":
-        "scilus/scilus:latest"}"
+        'https://scil.usherbrooke.ca/containers/scilus_2.0.2.sif':
+        'scilus/scilus:latest'}"
 
     input:
     tuple val(meta), path(image), path(reference), path(warp), path(affine)
