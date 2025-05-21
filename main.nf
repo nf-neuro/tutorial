@@ -224,7 +224,7 @@ workflow {
     TRANSFORM_MASK_WM_MNI ( ch_ants_apply_mask_wm_mni )
 
     // We need to transform the tractogram to MNI space.
-    ch_ants_apply_tractogram_to_mni = TRACTOFLOW.out.local_tractogram
+    ch_ants_apply_tractogram_to_mni = TRACKING_LOCALTRACKING.out.trk
         .combine(inputs.mni_template)
         .join(REGISTER_TO_MNI.out.affine)
         .join(TRACTOFLOW.out.dti_fa)
