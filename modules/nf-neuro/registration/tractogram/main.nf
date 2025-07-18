@@ -43,7 +43,8 @@ process REGISTRATION_TRACTOGRAM {
                         $inverse\
                         $reverse_operation\
                         $force\
-                        $reference
+                        $reference\
+                        $cut_invalid
 
         scil_tractogram_remove_invalid.py tmp.trk ${prefix}__\${bname}${suffix}.\${ext}\
                         $cut_invalid\
