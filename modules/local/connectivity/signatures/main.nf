@@ -15,7 +15,7 @@ process GENERATE_JUNCTION_SIGNATURES {
         do scil_tractogram_compute_density_map.py \${i} \${i/.trk/.nii.gz};
     done
 
-    rpr_generate_junction.py ${signatures} ${mapping} split/ \
+    generate_junctions.py ${signatures} ${mapping} split/ \
         ${wm} ${nufo} junction_labels.nii.gz
 
     rm -rf split/
