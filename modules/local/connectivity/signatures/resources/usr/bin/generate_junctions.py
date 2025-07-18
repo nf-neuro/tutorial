@@ -196,37 +196,37 @@ def main():
     labels[labels == -1] = 0
 
     # Remove unconnected island for each label
-    min_voxel_count = 6
-    voxel_to_remove = np.ones_like(labels, dtype=np.uint8)
+    # min_voxel_count = 6
+    # voxel_to_remove = np.ones_like(labels, dtype=np.uint8)
 
-    for label_id in tqdm.tqdm(np.unique(labels)[1:]):
-        curr_data = np.zeros_like(labels, dtype=np.uint8)
-        curr_data[labels == label_id] = 1
-        components, nb_structures = ndi.label(curr_data)
-        # For each label, remove small components
-        for label in range(1, nb_structures + 1):
-            if np.count_nonzero(components == label) < min_voxel_count:
-                voxel_to_remove[components == label] = 0
-    labels *= voxel_to_remove
+    # for label_id in tqdm.tqdm(np.unique(labels)[1:]):
+    #     curr_data = np.zeros_like(labels, dtype=np.uint8)
+    #     curr_data[labels == label_id] = 1
+    #     components, nb_structures = ndi.label(curr_data)
+    #     # For each label, remove small components
+    #     for label in range(1, nb_structures + 1):
+    #         if np.count_nonzero(components == label) < min_voxel_count:
+    #             voxel_to_remove[components == label] = 0
+    # labels *= voxel_to_remove
 
-    coord_unfound = np.argwhere((wm_mask > 0) & (labels == 0))
-    coord_found = np.argwhere(labels > 0)
+    # coord_unfound = np.argwhere((wm_mask > 0) & (labels == 0))
+    # coord_found = np.argwhere(labels > 0)
 
-    tree = KDTree(coord_found)
-    _, idx = tree.query(coord_unfound, k=1, distance_upper_bound=5)
+    # tree = KDTree(coord_found)
+    # _, idx = tree.query(coord_unfound, k=1, distance_upper_bound=5)
 
-    # # Filter out invalid indices (e.g., those that exceed the length of coord_found)
-    valid_idx_mask = idx < len(coord_found)
-    valid_idx = idx[valid_idx_mask]
+    # # # Filter out invalid indices (e.g., those that exceed the length of coord_found)
+    # valid_idx_mask = idx < len(coord_found)
+    # valid_idx = idx[valid_idx_mask]
 
-    # Extract the labels at the neighbor coordinates
-    labels_found = labels[coord_found[valid_idx, 0],
-                          coord_found[valid_idx, 1],
-                          coord_found[valid_idx, 2]]
-    # Assign the labels to the unfound coordinates
-    labels[coord_unfound[valid_idx_mask, 0],
-           coord_unfound[valid_idx_mask, 1],
-           coord_unfound[valid_idx_mask, 2]] = labels_found
+    # # Extract the labels at the neighbor coordinates
+    # labels_found = labels[coord_found[valid_idx, 0],
+    #                       coord_found[valid_idx, 1],
+    #                       coord_found[valid_idx, 2]]
+    # # Assign the labels to the unfound coordinates
+    # labels[coord_unfound[valid_idx_mask, 0],
+    #        coord_unfound[valid_idx_mask, 1],
+    #        coord_unfound[valid_idx_mask, 2]] = labels_found
 
     print(f"Saving labels to: {args.out_labels}")
     nib.save(nib.Nifti1Image(labels.astype(
