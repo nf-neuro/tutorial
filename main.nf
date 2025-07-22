@@ -234,12 +234,13 @@ workflow {
         }
     TRANSFORM_TRACTOGRAM_MNI ( ch_ants_apply_tractogram_to_mni )
 
-    ch_decompose = TRANSFORM_TRACTOGRAM_MNI.out.warped_tractogram
+    // Now simplify
+    // ch_decompose = TRANSFORM_TRACTOGRAM_MNI.out.warped_tractogram
+    //     .join(TRANSFORM_LABELS_TO_MNI.out.warped_image)
+    // CONNECTIVITY_DECOMPOSE ( ch_decompose )
+
+    ch_junction_signatures = TRANSFORM_TRACTOGRAM_MNI.out.warped_tractogram
         .join(TRANSFORM_LABELS_TO_MNI.out.warped_image)
-
-    CONNECTIVITY_DECOMPOSE ( ch_decompose )
-
-    ch_junction_signatures = CONNECTIVITY_DECOMPOSE.out.hdf5
         .join(TRANSFORM_MASK_WM_MNI.out.warped_image)
         .join(TRANSFORM_IMAGE_NUFO_MNI.out.warped_image)
         .combine(inputs.all_signatures)

@@ -150,11 +150,11 @@ def main():
         if np.sum(signature) == 0:
             return -1
 
-        curr_hash = hash(tuple(signature))
+        curr_hash = hash(tuple(signature[1:]))
         # Check if the current signature is in the dictionary
         if curr_hash in all_signatures_dict:
             return all_signatures_dict[curr_hash] + 1
-
+        return -1
         # Calculate distances (Cityblock = Manhattan) if not found
         # Too small signature does not have enough information
         curr_sum = np.sum(signature[1:])
@@ -162,7 +162,7 @@ def main():
             return -1
 
         # Filter signatures based on the sum of the signature
-        D = cdist(signature[1:].reshape(1, -1), all_signatures[:, 1:],
+        D = cdist(signature[1:].reshape(1, -1), all_signatures[:, :],
                   metric='cityblock')[0]
         
         best_val = np.min(D)
@@ -177,7 +177,7 @@ def main():
     tdi_data = tdi_data[intersection_mask].astype(float)
     nufo_data = nufo_data[intersection_mask]
     num_voxels = np.count_nonzero(intersection_mask)
-    labels_ravel = np.zeros_like(nufo_data, dtype=np.int16)
+    labels_ravel = np.zeros_like(nufo_data, dtype=np.int32)
 
     # Voxel-wise processing of signatures
     print("Processing signatures...")
@@ -189,11 +189,11 @@ def main():
         # labels_ravel[pos] = mapping_labels.get(best_match, -2)
         labels_ravel[pos] = best_match
 
-    labels = np.zeros_like(wm_data, dtype=np.int16)
+    labels = np.zeros_like(wm_data, dtype=np.int32)
     labels[intersection_mask] = labels_ravel
     print(f"Labels unmatched: {np.count_nonzero(labels == -1)}")
     print(f"Labels matched: {np.count_nonzero(labels > 0)}")
-    labels[labels == -1] = 0
+    # labels[labels == -1] = 0
 
     # Remove unconnected island for each label
     # min_voxel_count = 6
@@ -230,7 +230,7 @@ def main():
 
     print(f"Saving labels to: {args.out_labels}")
     nib.save(nib.Nifti1Image(labels.astype(
-        np.uint16), wm_img.affine), args.out_labels)
+        np.int32), wm_img.affine), args.out_labels)
 
 
 if __name__ == '__main__':
