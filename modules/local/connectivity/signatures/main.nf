@@ -14,7 +14,7 @@ process GENERATE_JUNCTION_SIGNATURES {
     decompose_simple.py ${trk} ${labels} split/
 
     touch ${prefix}__junction_labels.nii.gz
-    // generate_junctions.py ${signatures} ${mapping} split/ \
-    //     ${wm} ${nufo} ${prefix}__junction_labels.nii.gz
+    # generate_junctions.py ${signatures} ${mapping} split/ \
+    #     ${wm} ${nufo} ${prefix}__junction_labels.nii.gz
     """
 }
