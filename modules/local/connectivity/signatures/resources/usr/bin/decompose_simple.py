@@ -51,7 +51,7 @@ def main():
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
 
-    unique_labels = np.unique(labels)
+    unique_labels = np.unique(labels)[1:]
     comb_list = list(itertools.combinations(unique_labels, 2))
     comb_list.extend([(i, i) for i in unique_labels])
 
