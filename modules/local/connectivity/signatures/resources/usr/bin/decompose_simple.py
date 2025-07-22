@@ -69,7 +69,7 @@ def main():
                                            sft.dimensions)
 
         nib.save(nib.Nifti1Image(density.astype(np.int32), sft.affine),
-                 os.path.join(args.out_dir, f'{i+1}_{j+1}.nii.gz'))
+                 os.path.join(args.out_dir, f'{i}_{j}.nii.gz'))
 
 if __name__ == '__main__':
     main()
