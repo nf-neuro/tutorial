@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import tqdm
+from glob import glob
 
 import nibabel as nib
 import numpy as np
@@ -24,20 +25,22 @@ def _build_arg_parser():
     p = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument('in_assignement_files', nargs=2,
-                   metavar='ASSIGN_FILES',
+    p.add_argument('in_assignement_file',
                    help='Both assignment files:\n'
-                        '\t1. MAT file with all possible connectivity signatures\n'
-                        '\t2. MAT file with mapping of original to new labels.')
+                        '\tTXT file with all possible connectivity signatures')
     p.add_argument('in_dir',
                    help='Input directory containing subject decomposed '
                         'TDI files.')
     p.add_argument('in_wm_mask',
                    help='Input WM mask file.')
-    p.add_argument('in_nufo',
-                   help='Input NUFO file.')
     p.add_argument('out_labels',
                    help='Output directory to save the results.')
+    
+    p.add_argument('--only_signatures', action='store_true',
+                   help='If set, only the signatures will be processed '
+                        'and saved, skipping the labels generation.')
+    p.add_argument('--skip_spatial_filtering', action='store_true',
+                   help='If set, spatial filtering of signatures will be skipped.')
     add_reference_arg(p)
     add_overwrite_arg(p)
     add_verbose_arg(p)
@@ -49,19 +52,20 @@ def main():
     parser = _build_arg_parser()
     args = parser.parse_args()
 
-    assert_inputs_exist(parser, args.in_assignement_files + [args.in_wm_mask,
-                                                             args.in_nufo])
+    assert_inputs_exist(parser, [args.in_assignement_file, args.in_wm_mask])
+    if args.only_signatures:
+        basename, ext = os.path.splitext(os.path.basename(args.out_labels))
+        if ext == '.gz':
+            basename, ext = os.path.splitext(os.path.basename(basename))
+        
+        if os.path.isfile(f"{basename}_signature.txt"):
+            raise FileExistsError(
+                f"Signature file {basename}_signature.txt already exists. "
+                "Please remove it or use a different output name.")
     if not os.path.isdir(args.in_dir):
         raise ValueError(
             f"Input directory not found: {args.in_dir}. Skipping subject.")
     assert_outputs_exist(parser, args, args.out_labels)
-
-    # mapping_labels = scipy.io.loadmat(args.in_assignement_files[1])
-    with open(args.in_assignement_files[1], 'r') as f:
-        mapping_labels = json.load(f)
-    orig_labels = np.squeeze(mapping_labels['orig_label'])
-    # new_labels = np.squeeze(mapping_labels['new_label'])
-    # mapping_labels = dict(zip(orig_labels, new_labels))
 
     # Define LABEL matrix (ensure dtype is appropriate, e.g., int)
     # Using the second LABEL matrix provided in the MATLAB code
@@ -70,23 +74,18 @@ def main():
     for i, coord in enumerate(zip(*comb_list)):
         matrix_pos[coord] = i + 1
 
-    # mat_data = scipy.io.loadmat(args.in_assignement_files[0])
-    # B = mat_data['B']
     global all_signatures, all_signatures_dict
     all_possibles_signatures = np.loadtxt(
-        args.in_assignement_files[0]).astype(np.uint8)
+        args.in_assignement_file).astype(np.uint8)
     print(f"Loaded {len(all_possibles_signatures)} signatures from "
-          f"{args.in_assignement_files[0]}")
+          f"{args.in_assignement_file}")
 
     all_signatures = all_possibles_signatures.astype(float)
-    all_signatures_dict = {hash(tuple(row)): i for i,
+    # +1 to ensure labels start from 1
+    all_signatures_dict = {hash(tuple(row)): i+1 for i,
                            row in enumerate(all_signatures)}
     print(f"Using {len(all_signatures)} signatures from "
-          f"{args.in_assignement_files[0]}")
-
-    nufo_img = nib.load(args.in_nufo)
-    nufo_data = nufo_img.get_fdata().astype(np.uint8)
-    nufo_data = np.clip(nufo_data, 0, 3)
+          f"{args.in_assignement_file}")
 
     wm_img = nib.load(args.in_wm_mask)
     wm_data = wm_img.get_fdata().astype(np.float32)
@@ -95,9 +94,7 @@ def main():
     max_label = np.max(matrix_pos[matrix_pos > 0])
     tdi_data = np.zeros(wm_data.shape + (max_label,), dtype=np.float16)
 
-    assert_headers_compatible(wm_img, [nufo_img])
     print(f"Initialized labels array with shape: {tdi_data.shape}")
-
     print("Grabbing TDI files...")
     count = 0
     comb_list = np.triu_indices(15, k=0)
@@ -150,19 +147,19 @@ def main():
         if np.sum(signature) == 0:
             return -1
 
-        curr_hash = hash(tuple(signature[1:]))
+        curr_hash = hash(tuple(signature))
         # Check if the current signature is in the dictionary
         if curr_hash in all_signatures_dict:
-            return all_signatures_dict[curr_hash] + 1
-        return -1
+            return all_signatures_dict[curr_hash]
+
         # Calculate distances (Cityblock = Manhattan) if not found
         # Too small signature does not have enough information
-        curr_sum = np.sum(signature[1:])
+        curr_sum = np.sum(signature)
         if curr_sum < 3:
             return -1
 
         # Filter signatures based on the sum of the signature
-        D = cdist(signature[1:].reshape(1, -1), all_signatures[:, :],
+        D = cdist(signature.reshape(1, -1), all_signatures,
                   metric='cityblock')[0]
         
         best_val = np.min(D)
@@ -175,58 +172,85 @@ def main():
     # Flatten except the last dimension
     intersection_mask = np.sum(tdi_data, axis=-1) > 0 & wm_mask
     tdi_data = tdi_data[intersection_mask].astype(float)
-    nufo_data = nufo_data[intersection_mask]
     num_voxels = np.count_nonzero(intersection_mask)
-    labels_ravel = np.zeros_like(nufo_data, dtype=np.int32)
+    labels_ravel = np.zeros(num_voxels, dtype=np.int32)
 
     # Voxel-wise processing of signatures
     print("Processing signatures...")
+    unique_signatures_count = {}
     for pos in tqdm.tqdm(range(num_voxels), total=num_voxels):
         curr_signature = tdi_data[pos]
-        curr_signature = np.insert(curr_signature, 0, nufo_data[pos])
-        best_match = _process_voxel(curr_signature)
+        if args.only_signatures:
+            # If only signatures are processed, save them directly
+            unique_signatures_count[tuple(curr_signature)] = \
+                unique_signatures_count.get(tuple(curr_signature), 0) + 1
+            continue
 
-        # labels_ravel[pos] = mapping_labels.get(best_match, -2)
-        labels_ravel[pos] = best_match
+        labels_ravel[pos] = _process_voxel(curr_signature)
+
+    if args.only_signatures:
+        print("Only signatures processed, skipping label generation.")
+        # Save unique signatures to a txt file and count to json
+        unique_signatures = list(unique_signatures_count.keys())
+        unique_signatures = np.array(unique_signatures, dtype=np.uint8)
+        basename, ext = os.path.splitext(os.path.basename(args.out_labels))
+        if ext == '.gz':
+            basename, ext = os.path.splitext(os.path.basename(basename))
+        np.savetxt(f"{basename}_signature.txt",
+                   unique_signatures, fmt='%d', delimiter=' ')
+        
+        tmp_dict = {}
+        for key in unique_signatures_count:
+            str_key = ' '.join(map(str, key))
+            tmp_dict[str_key] = unique_signatures_count[key]
+        with open(f"{basename}_count.json", 'w') as f:
+            json.dump(tmp_dict, f, indent=4)
+
+        return
 
     labels = np.zeros_like(wm_data, dtype=np.int32)
     labels[intersection_mask] = labels_ravel
     print(f"Labels unmatched: {np.count_nonzero(labels == -1)}")
     print(f"Labels matched: {np.count_nonzero(labels > 0)}")
-    # labels[labels == -1] = 0
 
-    # Remove unconnected island for each label
-    # min_voxel_count = 6
-    # voxel_to_remove = np.ones_like(labels, dtype=np.uint8)
+    if not args.skip_spatial_filtering:
+        labels[labels == -1] = 0
 
-    # for label_id in tqdm.tqdm(np.unique(labels)[1:]):
-    #     curr_data = np.zeros_like(labels, dtype=np.uint8)
-    #     curr_data[labels == label_id] = 1
-    #     components, nb_structures = ndi.label(curr_data)
-    #     # For each label, remove small components
-    #     for label in range(1, nb_structures + 1):
-    #         if np.count_nonzero(components == label) < min_voxel_count:
-    #             voxel_to_remove[components == label] = 0
-    # labels *= voxel_to_remove
+        # Remove unconnected island for each label
+        min_voxel_count = 6
+        voxel_to_remove = np.ones_like(labels, dtype=np.uint8)
 
-    # coord_unfound = np.argwhere((wm_mask > 0) & (labels == 0))
-    # coord_found = np.argwhere(labels > 0)
+        for label_id in tqdm.tqdm(np.unique(labels)[1:]):
+            curr_data = np.zeros_like(labels, dtype=np.uint8)
+            curr_data[labels == label_id] = 1
+            components, nb_structures = ndi.label(curr_data)
+            # For each label, remove small components
+            for label in range(1, nb_structures + 1):
+                if np.count_nonzero(components == label) < min_voxel_count:
+                    voxel_to_remove[components == label] = 0
+        labels *= voxel_to_remove
 
-    # tree = KDTree(coord_found)
-    # _, idx = tree.query(coord_unfound, k=1, distance_upper_bound=5)
+        coord_unfound = np.argwhere((wm_mask > 0) & (labels == 0))
+        coord_found = np.argwhere(labels > 0)
 
-    # # # Filter out invalid indices (e.g., those that exceed the length of coord_found)
-    # valid_idx_mask = idx < len(coord_found)
-    # valid_idx = idx[valid_idx_mask]
+        tree = KDTree(coord_found)
+        _, idx = tree.query(coord_unfound, k=1, distance_upper_bound=5)
 
-    # # Extract the labels at the neighbor coordinates
-    # labels_found = labels[coord_found[valid_idx, 0],
-    #                       coord_found[valid_idx, 1],
-    #                       coord_found[valid_idx, 2]]
-    # # Assign the labels to the unfound coordinates
-    # labels[coord_unfound[valid_idx_mask, 0],
-    #        coord_unfound[valid_idx_mask, 1],
-    #        coord_unfound[valid_idx_mask, 2]] = labels_found
+        # Filter out invalid indices (e.g., those that exceed the length of coord_found)
+        valid_idx_mask = idx < len(coord_found)
+        valid_idx = idx[valid_idx_mask]
+
+        # Extract the labels at the neighbor coordinates
+        labels_found = labels[coord_found[valid_idx, 0],
+                            coord_found[valid_idx, 1],
+                            coord_found[valid_idx, 2]]
+        # Assign the labels to the unfound coordinates
+        labels[coord_unfound[valid_idx_mask, 0],
+            coord_unfound[valid_idx_mask, 1],
+            coord_unfound[valid_idx_mask, 2]] = labels_found
+
+    else:
+        print("Skipping spatial filtering of signatures.")
 
     print(f"Saving labels to: {args.out_labels}")
     nib.save(nib.Nifti1Image(labels.astype(
