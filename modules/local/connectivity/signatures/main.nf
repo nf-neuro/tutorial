@@ -6,7 +6,7 @@ process GENERATE_JUNCTION_SIGNATURES {
 
     output:
     tuple val(meta), path("*__junction_labels.nii.gz"), emit: junction_labels
-    tuple val(meta), path("*.txt"), emit: junction_labels
+    tuple val(meta), path("*.txt"), emit: junction_singatures
     path ("split/")               , emit: split
 
     script:
